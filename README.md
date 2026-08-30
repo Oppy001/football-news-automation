@@ -1,4 +1,3 @@
-```markdown
 # AI-Powered Football News Automation & Distribution System ⚽🤖
 
 ![Full Workflow Overview](assets/workflow-full.jpg)
@@ -17,7 +16,6 @@ The goal is to create a reliable pipeline that continuously processes incoming f
 
 At a high level, the automation follows this process:
 
-```text
 Football RSS Sources
         ↓
 News Aggregation
