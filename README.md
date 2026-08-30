@@ -114,10 +114,8 @@ This project therefore focuses heavily on **automation architecture and programm
 2. **Configure Credentials:** Add your own OpenAI/Gemini API keys, Meta Graph API Token, and Buffer API Token in the n8n credentials manager.
 3. **Activate:** Toggle the workflow to **Active**. The cron trigger will run automatically at 06:00, 10:00, 14:00, 18:00, and 22:00.
 
-
 **Author:** Ayoola Peter Olamilekan ([@Oppy001](https://www.google.com/search?q=https://github.com/Oppy001))
 
 *AI Automation Specialist & System Architect*
-
 
 ```
