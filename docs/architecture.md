@@ -50,7 +50,7 @@ The architecture separates the content-generation logic from the physical publis
 
 ## 📊 Complete Data Flow Summary
 
-
+```text
 RSS SOURCES
       ↓
 SOURCE-SPECIFIC ENRICHMENT
