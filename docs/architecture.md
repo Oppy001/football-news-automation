@@ -15,7 +15,7 @@ Before examining the nodes, it is important to understand the design philosophy 
 
 ## 1. Ingestion, Filtering & Smart Deduplication
 
-![Data Ingestion](https://github.com/Oppy001/football-news-automation/blob/main/assets/%E2%80%8Bphase1-ingestion.jpg?raw=true)
+![Data Ingestion](../assets/phase1-ingestion.jpg)
 
 The workflow begins by polling 6 distinct RSS feeds on a cron schedule (`0 6,10,14,18,22 * * *`). It does not immediately publish data; instead, it enters a rigorous sanitization pipeline:
 
@@ -27,7 +27,7 @@ The workflow begins by polling 6 distinct RSS feeds on a cron schedule (`0 6,10,
 
 ## 2. Multi-Agent AI Chain
 
-![AI Processing Pipeline](https://github.com/Oppy001/football-news-automation/blob/main/assets/%E2%80%8Bphase2-ai-chain.jpg?raw=true)
+![AI Processing Pipeline](../assets/phase2-ai-chain.jpg)
 
 Approved stories are batched (2 at a time) and passed to the LLM orchestration layer.
 
