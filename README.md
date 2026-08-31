@@ -112,8 +112,8 @@ This project therefore focuses heavily on **automation architecture and programm
 
 Here are live examples of the fully automated output published directly to Facebook and X:
 
-![Live Facebook Post](assets/Facebook live post.jpg)
-![Live X Post](assets/X Live Post.jpg)
+![Live Facebook Post](assets/facebook-live-post.jpg)
+![Live X Post](assets/x-live-post.jpg)
 
 ## 🚀 Setup Instructions
 
