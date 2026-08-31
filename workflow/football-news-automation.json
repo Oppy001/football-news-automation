@@ -1,0 +1,1551 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 6,10,14,18,22 * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -784,
+        608
+      ],
+      "id": "16967362-8680-498b-8d85-3b8da521886e",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1680,
+        1280
+      ],
+      "id": "5dfa17b5-13fa-4e18-b700-80de0cca27ea",
+      "name": "No Operation, do nothing"
+    },
+    {
+      "parameters": {
+        "numberInputs": 7
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        336,
+        528
+      ],
+      "id": "72813bfa-5bc0-4723-aa22-bdce8e62ec9a",
+      "name": "Unified Football News Aggregator",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "url": "https://www.espn.com/espn/rss/soccer/news",
+        "options": {
+          "ignoreSSL": false
+        }
+      },
+      "id": "a34c5b23-8943-498a-b0a2-bee84ae6ff05",
+      "name": "ESPN Football RSS Source",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [
+        -560,
+        -16
+      ],
+      "retryOnFail": true,
+      "waitBetweenTries": 4000,
+      "disabled": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "http://feeds.bbci.co.uk/sport/football/rss.xml",
+        "options": {
+          "ignoreSSL": false
+        }
+      },
+      "id": "d881e15d-c5aa-49c6-a260-fc585307d21d",
+      "name": "BBC Football RSS Source",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [
+        -560,
+        272
+      ],
+      "retryOnFail": true,
+      "waitBetweenTries": 4000,
+      "disabled": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://www.skysports.com/rss/11095",
+        "options": {
+          "ignoreSSL": false
+        }
+      },
+      "id": "c63bcc48-5678-4d89-970b-5d05f62cf8a8",
+      "name": "Sky Sports Transfer Feed",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [
+        112,
+        704
+      ],
+      "retryOnFail": true,
+      "waitBetweenTries": 4000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://www.skysports.com/rss/12040",
+        "options": {
+          "ignoreSSL": false
+        }
+      },
+      "id": "a76de693-8281-4e63-a475-a0d095174330",
+      "name": "Sky Sports General Feed",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [
+        112,
+        896
+      ],
+      "retryOnFail": true,
+      "waitBetweenTries": 4000,
+      "disabled": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://www.skysports.com/rss/11833",
+        "options": {
+          "ignoreSSL": false
+        }
+      },
+      "id": "eebee370-863f-40ae-885d-48c99ecb2f53",
+      "name": "Sky Sports Breaking News Feed",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [
+        112,
+        1088
+      ],
+      "retryOnFail": true,
+      "waitBetweenTries": 4000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize Images — ensures all sources (ESPN, BBC, Sky) have an imageUrl\n\nreturn items.map(item => {\n  const d = item.json;\n\n  // Try different possible fields for image\n  const imageUrl =\n    d.imageUrl || // existing one from your ESPN/BBC code nodes\n    d.image?.link ||\n    d.image?.url ||\n    d.enclosure?.url ||\n    (Array.isArray(d.enclosures) && d.enclosures[0]?.url) ||\n    d[\"media:content\"]?.url ||\n    d[\"media:thumbnail\"]?.url ||\n    d.thumbnail?.url ||\n    d.thumbnail ||\n    null;\n\n  return {\n    json: {\n      ...d,\n      imageUrl // make sure every article now has imageUrl\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        544,
+        608
+      ],
+      "id": "d7b306ff-3206-4d30-8b3e-8d1e86c197cf",
+      "name": "Media Normalizer (Image Standardizer)",
+      "retryOnFail": false,
+      "maxTries": 2,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "jsCode": "// 🧠 Improved Freshness Filter for Football News\nconst items = $input.all();\nconst now = new Date();\nconst cutoffHours = 8; // Keep only articles within the last 8 hours\nconst freshStories = [];\nconst skippedStories = [];\nconst sourceCount = {}; // For debug summary\n\nfor (const item of items) {\n  const json = item.json;\n  \n  // Try multiple possible date fields\n  const possibleDates = [\n    json.pubDate,\n    json.isoDate,\n    json.date,\n    json.updated,\n    json.created,\n  ].filter(Boolean);\n  \n  // Parse the first valid date\n  let pubDate = null;\n  for (const d of possibleDates) {\n    const parsed = new Date(d);\n    if (!isNaN(parsed.getTime())) {\n      pubDate = parsed;\n      break;\n    }\n  }\n\n  // Calculate age if valid\n  let isFresh = false;\n  if (pubDate) {\n    const ageHours = (now - pubDate) / (1000 * 60 * 60);\n    isFresh = ageHours <= cutoffHours;\n    \n    // Debug: Log articles being filtered out\n    if (!isFresh) {\n      console.log(`⏰ TOO OLD (${Math.round(ageHours)}h ago): ${json.title}`);\n      skippedStories.push({\n        title: json.title,\n        ageHours: Math.round(ageHours * 10) / 10\n      });\n    }\n  } else {\n    // If date missing or invalid, SKIP IT for safety\n    isFresh = false;  // ← FIXED!\n    console.log(`⚠️ NO VALID DATE - SKIPPING: ${json.title}`);\n    skippedStories.push({\n      title: json.title,\n      reason: \"No valid date\"\n    });\n  }\n\n  if (isFresh) {\n    freshStories.push(item);\n    const src = json.source || json.link?.split(\"/\")[2] || \"Unknown Source\";\n    sourceCount[src] = (sourceCount[src] || 0) + 1;\n  }\n}\n\n// 🧾 Debug summary\nconsole.log(\"✅ KEPT:\", freshStories.length, \"fresh items\");\nconsole.log(\"❌ SKIPPED:\", skippedStories.length, \"old/undated items\");\nconsole.log(\"📊 Fresh stories by source:\", sourceCount);\nconsole.log(\"🗑️ Skipped stories:\", skippedStories.slice(0, 5)); // Show first 5 skipped\n\nreturn freshStories;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        992,
+        608
+      ],
+      "id": "ee37989a-7f85-4ec0-9075-2642b5a32d64",
+      "name": "⏱️ News Freshness Validator (8h Window)",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * Smart Football Deduplication Node for n8n\n * ------------------------------------------------------------\n * ✅ Removes duplicate football stories across RSS feeds\n * ✅ Normalizes club aliases\n * ✅ Detects player names BEFORE lowercase normalization\n * ✅ Keeps different stories involving the same player/club\n * ✅ Detects football relevance safely\n * ✅ JavaScript-compatible regex\n */\n\nconst items = $input.all();\n\n\n// ============================================================\n// 1. CLUB ALIAS NORMALIZATION MAP\n// ============================================================\n\nconst clubMap = {\n  \"man city\": \"Manchester City\",\n  \"manchester city fc\": \"Manchester City\",\n  \"citizens\": \"Manchester City\",\n  \"mcfc\": \"Manchester City\",\n\n  \"man united\": \"Manchester United\",\n  \"manchester united fc\": \"Manchester United\",\n  \"red devils\": \"Manchester United\",\n  \"mufc\": \"Manchester United\",\n\n  \"arsenal fc\": \"Arsenal\",\n  \"gunners\": \"Arsenal\",\n\n  \"chelsea fc\": \"Chelsea\",\n  \"the blues\": \"Chelsea\",\n\n  \"liverpool fc\": \"Liverpool\",\n  \"liverpool fc.\": \"Liverpool\",\n  \"reds\": \"Liverpool\",\n\n  \"psg\": \"Paris Saint-Germain\",\n  \"paris saint germain\": \"Paris Saint-Germain\",\n  \"paris sg\": \"Paris Saint-Germain\",\n\n  \"real madrid cf\": \"Real Madrid\",\n  \"los blancos\": \"Real Madrid\",\n\n  \"barca\": \"Barcelona\",\n  \"fc barcelona\": \"Barcelona\",\n  \"blaugrana\": \"Barcelona\",\n\n  \"juve\": \"Juventus\",\n  \"juventus fc\": \"Juventus\",\n  \"old lady\": \"Juventus\",\n\n  \"bayern\": \"Bayern Munich\",\n  \"bayern münchen\": \"Bayern Munich\",\n  \"fc bayern\": \"Bayern Munich\",\n\n  \"inter\": \"Inter Milan\",\n  \"internazionale\": \"Inter Milan\",\n\n  \"acm\": \"AC Milan\",\n\n  \"atleti\": \"Atletico Madrid\",\n  \"atlético\": \"Atletico Madrid\",\n  \"colchoneros\": \"Atletico Madrid\",\n\n  \"roma\": \"AS Roma\",\n  \"napoli\": \"Napoli\",\n\n  \"borussia dortmund\": \"Dortmund\",\n  \"bvb\": \"Dortmund\"\n};\n\n\n// ============================================================\n// 2. PLAYER DETECTION\n// IMPORTANT:\n// Detect names BEFORE lowercase normalization.\n// ============================================================\n\nfunction detectPlayers(text) {\n\n  if (!text) return [];\n\n  const matches = text.match(\n    /\\b[A-ZÀ-ÖØ-Þ][a-zà-öø-ÿ'-]+(?:\\s+[A-ZÀ-ÖØ-Þ][a-zà-öø-ÿ'-]+){1,2}\\b/g\n  ) || [];\n\n  return [...new Set(\n    matches.map(name =>\n      name\n        .toLowerCase()\n        .replace(/[^\\p{L}\\s'-]/gu, \"\")\n        .replace(/\\s+/g, \" \")\n        .trim()\n    )\n  )];\n}\n\n\n// ============================================================\n// 3. NORMALIZE CLUBS\n// ============================================================\n\nfunction normalizeClubs(text) {\n\n  let normalized = String(text || \"\").toLowerCase();\n\n  // Replace longer aliases first\n  const aliases = Object.keys(clubMap)\n    .sort((a, b) => b.length - a.length);\n\n  for (const alias of aliases) {\n\n    const escapedAlias = alias.replace(\n      /[.*+?^${}()|[\\]\\\\]/g,\n      \"\\\\$&\"\n    );\n\n    const regex = new RegExp(\n      `\\\\b${escapedAlias}\\\\b`,\n      \"gi\"\n    );\n\n    normalized = normalized.replace(\n      regex,\n      clubMap[alias].toLowerCase()\n    );\n  }\n\n  return normalized;\n}\n\n\n// ============================================================\n// 4. TEXT NORMALIZATION\n// ============================================================\n\nfunction normalizeText(text) {\n\n  return String(text || \"\")\n    .toLowerCase()\n    .normalize(\"NFD\")\n    .replace(/[\\u0300-\\u036f]/g, \"\")\n    .replace(/[^a-z0-9\\s]/g, \" \")\n    .replace(/\\s+/g, \" \")\n    .trim();\n}\n\n\n// ============================================================\n// 5. KNOWN CLUBS\n// ============================================================\n\nconst clubs = [\n  ...new Set(\n    Object.values(clubMap).map(club =>\n      normalizeText(club)\n    )\n  )\n];\n\n\n// ============================================================\n// 6. FOOTBALL KEYWORDS\n// ============================================================\n\nconst footballKeywords = [\n  \"goal\",\n  \"match\",\n  \"transfer\",\n  \"league\",\n  \"cup\",\n  \"football\",\n  \"manager\",\n  \"coach\",\n  \"player\",\n  \"signs\",\n  \"signed\",\n  \"contract\",\n  \"injury\",\n  \"injured\",\n  \"deal\",\n  \"agrees\",\n  \"agreement\",\n  \"bid\",\n  \"talks\",\n  \"negotiation\",\n  \"premier league\",\n  \"champions league\",\n  \"europa league\",\n  \"conference league\",\n  \"world cup\",\n  \"qualifier\",\n  \"qualifiers\",\n  \"fixture\",\n  \"fixtures\",\n  \"squad\",\n  \"lineup\",\n  \"line-up\",\n  \"starting xi\",\n  \"penalty\",\n  \"red card\",\n  \"yellow card\",\n  \"manager\",\n  \"managerial\",\n  \"midfielder\",\n  \"defender\",\n  \"striker\",\n  \"goalkeeper\",\n  \"forward\"\n];\n\n\n// ============================================================\n// 7. FOOTBALL RELEVANCE CHECK\n// ============================================================\n\nfunction containsFootballKeyword(text) {\n\n  const normalized = normalizeText(text);\n\n  return footballKeywords.some(keyword => {\n\n    const normalizedKeyword = normalizeText(keyword);\n\n    return normalized.includes(normalizedKeyword);\n  });\n}\n\n\n// ============================================================\n// 8. DEDUPLICATION\n// ============================================================\n\nconst seen = new Set();\nconst uniqueItems = [];\n\nfor (const item of items) {\n\n  const title =\n    item.json.title ||\n    item.json.Title ||\n    item.json.headline ||\n    \"\";\n\n  const description =\n    item.json.description ||\n    item.json.content ||\n    item.json.contentSnippet ||\n    \"\";\n\n  if (!title) {\n\n    console.log(\"🚫 Skipping article with no title\");\n\n    continue;\n  }\n\n\n  // ----------------------------------------------------------\n  // Detect players BEFORE normalization\n  // ----------------------------------------------------------\n\n  const originalText = `${title} ${description}`;\n\n  const foundPlayers = detectPlayers(originalText);\n\n\n  // ----------------------------------------------------------\n  // Normalize club aliases\n  // ----------------------------------------------------------\n\n  const combined = normalizeClubs(originalText);\n\n\n  // ----------------------------------------------------------\n  // Detect canonical clubs\n  // ----------------------------------------------------------\n\n  const foundClubs = clubs.filter(club =>\n    combined.includes(club)\n  );\n\n\n  // ----------------------------------------------------------\n  // Normalize title\n  // ----------------------------------------------------------\n\n  const titlePart = normalizeText(title)\n    .slice(0, 100);\n\n\n  // ----------------------------------------------------------\n  // Football relevance\n  // ----------------------------------------------------------\n\n  const isFootballStory =\n    containsFootballKeyword(combined);\n\n\n  // ----------------------------------------------------------\n  // Build deduplication key\n  // ----------------------------------------------------------\n\n  const key =\n    `${foundPlayers.sort().join(\",\")}|` +\n    `${foundClubs.sort().join(\",\")}|` +\n    `${titlePart}`;\n\n\n  // ----------------------------------------------------------\n  // Keep relevant unique stories\n  // ----------------------------------------------------------\n\n  if (\n    !seen.has(key) &&\n    (\n      foundClubs.length > 0 ||\n      foundPlayers.length > 0 ||\n      isFootballStory\n    )\n  ) {\n\n    seen.add(key);\n\n    uniqueItems.push(item);\n\n    console.log(`✅ KEEP: ${title}`);\n    console.log(\n      `   👤 Players: ${foundPlayers.join(\", \") || \"None\"}`\n    );\n    console.log(\n      `   ⚽ Clubs: ${foundClubs.join(\", \") || \"None\"}`\n    );\n\n  } else {\n\n    console.log(`🚫 DUPLICATE / IRRELEVANT: ${title}`);\n    console.log(`   🔑 Key: ${key}`);\n\n  }\n}\n\n\n// ============================================================\n// 9. DEBUG SUMMARY\n// ============================================================\n\nconsole.log(\"==========================================\");\nconsole.log(\"⚽ SMART FOOTBALL DEDUPLICATOR\");\nconsole.log(\"==========================================\");\nconsole.log(`📥 Input: ${items.length}`);\nconsole.log(`✅ Kept: ${uniqueItems.length}`);\nconsole.log(`🚫 Removed: ${items.length - uniqueItems.length}`);\nconsole.log(\"==========================================\");\n\n\nreturn uniqueItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1216,
+        608
+      ],
+      "id": "cc50d688-29e4-4be6-82d7-28d3fd64a7d8",
+      "name": "⏱️ Smart Football Deduplicator Engine",
+      "retryOnFail": true,
+      "waitBetweenTries": 3000,
+      "maxTries": 2
+    },
+    {
+      "parameters": {
+        "batchSize": 2,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        768,
+        896
+      ],
+      "id": "2084cb01-a8d4-4620-87bd-2747df548815",
+      "name": "🔁 Batch Processor (Split In Batches - 2 Items)"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.output.imageUrl }}",
+        "options": {
+          "allowUnauthorizedCerts": true,
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2960,
+        1344
+      ],
+      "id": "28b6139d-591a-4194-91eb-386abfba97fa",
+      "name": "🖼️ Image Fetcher",
+      "retryOnFail": false,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "hostUrl": "=graph.facebook.com",
+        "httpRequestMethod": "POST",
+        "graphApiVersion": "v23.0",
+        "node": "me",
+        "edge": "photos",
+        "sendBinaryData": true,
+        "binaryPropertyName": "=data",
+        "options": {
+          "queryParameters": {
+            "parameter": [
+              {
+                "name": "message",
+                "value": "={{ $json.output.facebook_post }}"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.facebookGraphApi",
+      "typeVersion": 1,
+      "position": [
+        3408,
+        1248
+      ],
+      "id": "b5ac3369-e095-4adf-ad4f-0b1a766265dc",
+      "name": "📘 Facebook Publisher (Meta Graph API)",
+      "retryOnFail": false,
+      "waitBetweenTries": 5000,
+      "alwaysOutputData": false,
+      "executeOnce": false,
+      "credentials": {
+        "facebookGraphApi": {
+          "id": "qUwUN6r7Dgk0Ykw7",
+          "name": "Facebook Graph account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "amount": 1.5,
+        "unit": "minutes"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        3952,
+        1632
+      ],
+      "id": "cde0c5f7-6768-4ce3-bafc-da984cec1108",
+      "name": "⏳ Cross-Batch Throttle Controller",
+      "webhookId": "97b3abd5-b30f-404e-816d-26d300cda567"
+    },
+    {
+      "parameters": {
+        "amount": 10
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2048,
+        1088
+      ],
+      "id": "431aa9ac-4762-43b8-b1f3-a74f1e864b29",
+      "name": "⏳ Batch Hold Delay (Pre-AI Cooldown)",
+      "webhookId": "f2d44e18-f08a-4db2-b42e-370b6be83598"
+    },
+    {
+      "parameters": {
+        "amount": 1
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2384,
+        1344
+      ],
+      "id": "55eb09ee-7c78-438a-a64e-32bcb9cb67ea",
+      "name": "⏳ Post Delay Controller",
+      "webhookId": "fff719c9-e7b5-493e-bd81-78b50adb3e89"
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map(item => {\n  const html = item.json.data || item.json.body || '';\n\n  // 1. OpenGraph image (primary)\n  const ogMatch = html.match(/<meta property=\"og:image\" content=\"([^\"]+)\"/i);\n  const ogImage = ogMatch ? ogMatch[1] : null;\n\n  // 2. OpenGraph video image (fallback for video posts)\n  const videoMatch = html.match(/<meta property=\"og:video:image\" content=\"([^\"]+)\"/i);\n  const videoImage = videoMatch ? videoMatch[1] : null;\n\n  // 3. Generic fallback (sometimes ESPN embeds thumbnails in img tags)\n  const imgMatch = html.match(/<img[^>]+src=\"([^\"]+(?:jpg|jpeg|png))\"/i);\n  const imgFallback = imgMatch ? imgMatch[1] : null;\n\n  // Final priority chain\n  const imageUrl = ogImage || videoImage || imgFallback || null;\n\n  return {\n    json: {\n      imageUrl\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -112,
+        -96
+      ],
+      "id": "038e7de5-435e-4028-9847-a512f53a3ea1",
+      "name": "ESPN Image Extractor",
+      "retryOnFail": true,
+      "waitBetweenTries": 3000,
+      "maxTries": 3,
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map(item => {\n  const html = item.json.data || item.json.body || '';\n  \n  // Try to extract the first image in the article HTML\n  const imageMatch = html.match(/<img[^>]+src=\"([^\">]+)\"/i);\n  const imageUrl = imageMatch ? imageMatch[1] : null;\n\n  // Return ONLY the image — let Merge combine it with RSS\n  return {\n    json: {\n      imageUrl\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -112,
+        192
+      ],
+      "id": "498a8b0c-361c-4cee-94ec-99cd6c539ddd",
+      "name": "BBC Image Extractor",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "url": "={{$json[\"link\"]}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -336,
+        192
+      ],
+      "id": "1baf35b2-2f0d-427c-9dcd-221e4205e43f",
+      "name": "BBC Article HTML Fetcher",
+      "retryOnFail": true,
+      "waitBetweenTries": 4000,
+      "disabled": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "mergeByIndex"
+      },
+      "id": "b0717165-2903-4531-a1d4-3e06ba0cc15f",
+      "name": "ESPN Enriched Article Builder (Text + Image Merge)",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 1,
+      "position": [
+        112,
+        -16
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "mode": "mergeByIndex",
+        "join": "inner"
+      },
+      "id": "e4206ccd-44f4-4dc8-99fb-57868e80b488",
+      "name": "BBC Enriched Article Builder (Text + Image Merge)",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 1,
+      "position": [
+        112,
+        272
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "url": "={{$json.link}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -336,
+        -96
+      ],
+      "id": "aec0a070-d45b-4081-b200-7ea5b3bf11ce",
+      "name": "ESPN Article HTML Fetcher",
+      "retryOnFail": true,
+      "waitBetweenTries": 4000,
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "url": "https://talksport.com/football/feed/",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        -112,
+        512
+      ],
+      "id": "12077aea-b287-4308-b5b4-2bd66dcd354d",
+      "name": "TALKSPORT RSS source"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 🧹 Strict BBC-Style Standardizer\nreturn items.map(item => {\n  const d = item.json;\n\n  // 1. Locate the raw text\n  let rawContent = d['content:encoded'] || d.content || d.description || \"\";\n\n  // 2. 🖼️ IMAGE HUNTER: Find the image and save it\n  let extractedImage = d.imageUrl || \"\"; \n  \n  if (!extractedImage && d.enclosure && d.enclosure.url) {\n    extractedImage = d.enclosure.url; \n  } else if (!extractedImage && Array.isArray(d.enclosures) && d.enclosures.length > 0) {\n    extractedImage = d.enclosures[0].url;\n  } else if (!extractedImage && rawContent) {\n    const imgMatch = rawContent.match(/<img[^>]+src=[\"']([^\"']+)[\"']/i);\n    if (imgMatch) {\n        extractedImage = imgMatch[1];\n    }\n  }\n\n  // Fix annoying double-slash URLs\n  if (extractedImage && extractedImage.startsWith('//')) {\n      extractedImage = 'https:' + extractedImage;\n  }\n\n  // 3. 🧼 HTML STRIPPER: Wash the code out to create pure text\n  let cleanText = rawContent\n    .replace(/<[^>]*>?/gm, ' ') // Rips out all HTML tags\n    .replace(/&#8216;/g, \"'\").replace(/&#8217;/g, \"'\") \n    .replace(/&#8220;/g, '\"').replace(/&#8221;/g, '\"')\n    .replace(/&#8230;/g, '...') \n    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')\n    .replace(/\\s+/g, ' ').trim(); \n\n  // 4. Fallback generators for missing data\n  let snippet = d.contentSnippet || d.description || cleanText.substring(0, 150) + \"...\";\n  let pubDate = d.pubDate || new Date().toUTCString();\n  let isoDate = d.isoDate || new Date(pubDate).toISOString();\n  let guid = d.guid || d.id || d.link || \"\";\n\n  // 5. 📦 STRICT OUTPUT: Only output the exact 8 fields BBC uses\n  return {\n    json: {\n      title: d.title || \"No Title\",\n      link: d.link || \"\",\n      pubDate: pubDate,\n      content: cleanText,\n      contentSnippet: snippet,\n      guid: guid,\n      isoDate: isoDate,\n      imageUrl: extractedImage\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        112,
+        512
+      ],
+      "id": "658e0f8f-04d6-4f7f-95d8-a9f17ad3809c",
+      "name": "🧹 Universal Feed Standardizer"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst staticData = $getWorkflowStaticData('global');\n\nif (!staticData.postedStories) {\n  staticData.postedStories = [];\n}\n\nconst output = [];\n\n// Normalize text consistently\nfunction normalize(text) {\n  return String(text || '')\n    .toLowerCase()\n    .replace(/[^\\w\\s]/g, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\nfor (const item of items) {\n  const data = item.json || {};\n\n  // -----------------------------------------\n  // 1. GET TITLE\n  // -----------------------------------------\n  const title =\n    data.title ||\n    data.Title ||\n    data.headline ||\n    '';\n\n  // -----------------------------------------\n  // 2. GET URL\n  // -----------------------------------------\n  const url =\n    data.url ||\n    data.link ||\n    '';\n\n  // -----------------------------------------\n  // 3. GET IMAGE\n  // -----------------------------------------\n  const image =\n    data.imageUrl ||\n    data.image ||\n    data.image_url ||\n    data.media?.url ||\n    data.enclosure?.url ||\n    '';\n\n  // -----------------------------------------\n  // 4. CLEAN VALUES\n  // -----------------------------------------\n  const cleanTitle = String(title).trim();\n  const cleanUrl = String(url).trim();\n  const cleanImage = String(image).trim();\n\n  // -----------------------------------------\n  // 5. NO IMAGE = SKIP\n  // -----------------------------------------\n  if (!cleanImage) {\n    console.log(`🚫 SKIPPED — No image: ${cleanTitle}`);\n    continue;\n  }\n\n  // -----------------------------------------\n  // 6. INVALID ARTICLE = SKIP\n  // -----------------------------------------\n  if (!cleanTitle || !cleanUrl) {\n    console.log(`🚫 SKIPPED — Missing title or URL`);\n    continue;\n  }\n\n  // -----------------------------------------\n  // 7. GENERATE STORY ID\n  // -----------------------------------------\n  const storyId = normalize(`${cleanTitle}|${cleanUrl}`);\n\n  // -----------------------------------------\n  // 8. CHECK PREVIOUSLY POSTED STORIES\n  // -----------------------------------------\n  if (staticData.postedStories.includes(storyId)) {\n    console.log(`🚫 DUPLICATE — Already posted: ${cleanTitle}`);\n    continue;\n  }\n\n  // -----------------------------------------\n  // 9. PASS NEW STORY\n  // -----------------------------------------\n  output.push({\n    json: {\n      ...data,\n      imageUrl: cleanImage,\n      storyId\n    }\n  });\n\n  console.log(`✅ NEW STORY: ${cleanTitle}`);\n}\n\nconsole.log(`📊 Input stories: ${items.length}`);\nconsole.log(`📤 Stories passed forward: ${output.length}`);\n\nreturn output;"
+      },
+      "id": "f6aaa801-af44-4c1c-9941-eb0b1b9c79b8",
+      "name": "🚫 Duplicate Checker",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        576,
+        896
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst staticData = $getWorkflowStaticData('global');\n\n// Initialize persistent storage\nif (!Array.isArray(staticData.postedStories)) {\n  staticData.postedStories = [];\n}\n\nfor (const item of items) {\n\n  const data = item.json || {};\n\n  // ============================================================\n  // 1. STORY ID\n  // ============================================================\n\n  const storyId = String(\n    data.storyId ||\n    data.story_id ||\n    ''\n  ).trim();\n\n  if (!storyId) {\n    console.log('🚫 Successful Post Logger: Missing storyId');\n    continue;\n  }\n\n\n  // ============================================================\n  // 2. ONLY ACCEPT CONFIRMED SUCCESS\n  // ============================================================\n\n  if (data.error) {\n    console.log(`❌ Post failed — NOT logging: ${storyId}`);\n    continue;\n  }\n\n  if (data.postSuccess !== true) {\n    console.log(\n      `❌ Post not confirmed successful — NOT logging: ${storyId}`\n    );\n    continue;\n  }\n\n\n  // ============================================================\n  // 3. PLATFORM\n  // ============================================================\n\n  const platform =\n    String(data.platform || 'unknown').toLowerCase();\n\n\n  // ============================================================\n  // 4. CHECK IF STORY ALREADY EXISTS\n  // ============================================================\n\n  const existingStory = staticData.postedStories.find(\n    story => story.storyId === storyId\n  );\n\n\n  // ============================================================\n  // 5. STORY ALREADY LOGGED\n  // ============================================================\n\n  if (existingStory) {\n\n    // Add platform if it is new\n    if (\n      platform !== 'unknown' &&\n      !existingStory.platforms.includes(platform)\n    ) {\n      existingStory.platforms.push(platform);\n    }\n\n    // Save Facebook post ID\n    if (\n      platform === 'facebook' &&\n      data.facebookPostId\n    ) {\n      existingStory.facebookPostId =\n        data.facebookPostId;\n    }\n\n    // Save X response\n    if (\n      platform === 'x' &&\n      data.xResponse\n    ) {\n      existingStory.xResponse =\n        data.xResponse;\n    }\n\n    console.log(\n      `⚠️ Story already logged: ${storyId} (${platform})`\n    );\n\n    continue;\n  }\n\n\n  // ============================================================\n  // 6. CREATE SUCCESSFUL STORY RECORD\n  // ============================================================\n\n  staticData.postedStories.push({\n\n    storyId,\n\n    url:\n      data.url ||\n      data.link ||\n      '',\n\n    platforms:\n      platform !== 'unknown'\n        ? [platform]\n        : [],\n\n    facebookPostId:\n      platform === 'facebook'\n        ? data.facebookPostId || ''\n        : '',\n\n    xResponse:\n      platform === 'x'\n        ? data.xResponse || ''\n        : '',\n\n    loggedAt:\n      new Date().toISOString()\n  });\n\n\n  console.log(\n    `✅ Successfully logged story: ${storyId} (${platform})`\n  );\n}\n\n\n// ============================================================\n// 7. KEEP MEMORY UNDER CONTROL\n// ============================================================\n\nconst MAX_STORIES = 100;\n\nif (staticData.postedStories.length > MAX_STORIES) {\n  staticData.postedStories =\n    staticData.postedStories.slice(-MAX_STORIES);\n}\n\n\n// ============================================================\n// 8. DEBUG\n// ============================================================\n\nconsole.log(\n  `📊 Successful stories stored: ${staticData.postedStories.length}`\n);\n\nreturn items;"
+      },
+      "id": "6404543e-c66e-423c-88df-f3530ef06a3e",
+      "name": "✅ Successful Post Logger",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4080,
+        1344
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst bannedKeywords = [\n  \"betting\",\n  \"odds\",\n  \"bookmakers\",\n  \"prediction\",\n  \"predictions\",\n  \"tips\",\n  \"accumulator\",\n  \"parlay\",\n  \"fantasy football\",\n  \"opinion\",\n  \"opinion:\",\n  \"rumour rating\",\n  \"transfer rumours live\",\n  \"live blog\",\n  \"watch live\",\n  \"stream\",\n  \"how to watch\"\n];\n\nfunction isBadContent(text) {\n  text = (text || \"\").toLowerCase();\n  return bannedKeywords.some(word => text.includes(word));\n}\n\nreturn items.filter(item => {\n  const title = item.json.title || item.json.Title || \"\";\n  const desc = item.json.content || item.json.description || \"\";\n\n  const combined = `${title} ${desc}`;\n\n  const bad = isBadContent(combined);\n\n  if (bad) {\n    console.log(\"🚫 Filtered out:\", title);\n    return false;\n  }\n\n  return true;\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        768,
+        608
+      ],
+      "id": "e5171cc7-f9e0-49fb-bce2-84cfa21882c0",
+      "name": "🛑 Football Content Safety Filter",
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nfunction normalize(value) {\n  return String(value || '')\n    .toLowerCase()\n    .normalize('NFKD')\n    .replace(/[\\u0300-\\u036f]/g, '')\n    .replace(/[^a-z0-9\\s]/g, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\nfunction storyKey(title, url) {\n  const normalizedTitle = normalize(title);\n  const normalizedUrl = normalize(url);\n\n  return `${normalizedTitle} | ${normalizedUrl}`;\n}\n\nreturn items.map(item => {\n\n  const title =\n    item.json.Title ||\n    item.json.title ||\n    item.json.headline ||\n    '';\n\n  const url =\n    item.json.url ||\n    item.json.link ||\n    '';\n\n  // Safety: a story needs at least a title or URL\n  if (!title && !url) {\n    item.json.storyId = '';\n    return item;\n  }\n\n  item.json.storyId = storyKey(title, url);\n\n  return item;\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        608
+      ],
+      "id": "0451d24a-0ee5-41ca-8e63-d354dacb9fc0",
+      "name": "🧠 Generate Story ID"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        3856,
+        1344
+      ],
+      "id": "d1e2b008-3354-4009-bc7b-c413b5a0d66b",
+      "name": "Post Merger"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a professional football news curator and social media strategist, specializing in men's football. Your audience is male football fans. \nYour task is to analyze the following article and provide a score and recommendation for social media posting. \nOnly consider men's football content; skip or assign 0 to any female football content and any football video highlight content.\n\n---\nCurrent Date: {{ $now.toFormat('MMMM dd, yyyy') }}\n\n⚡ Evaluation Criteria (Rate each 1–5)\n1️⃣ Headline Appeal – How catchy, curiosity-driven, urgent, or emotional is the headline?  \n2️⃣ Timeliness & Relevance – Is the story recent, newsworthy, or trending?  \n3️⃣ Player/Club Impact – Does it involve popular clubs or players with strong fan bases?  \n4️⃣ Engagement Potential – How likely is it to drive likes, shares, or comments?\n\nTotal possible score = 20 (sum of all 4 criteria).\n\n---\n📌 Rules\n- Analyze only **men's football**.  \n- Female football content → Score = 0, Decision = Skip.\n- Skip any football video highlight content and skip any ASK ME ANYTHING content from any of the sources\n- Ignore outdated or unverified content and content that says watch live matches, any content that speak about live matches.  \n- Also skip content or article that has source logo like the espn logo, skyport logo, bbc logo and others in it image link (i.e skip content that has source logo as the image) - assign their content to be 0 in Score\n- Ensure that the same content or article from different sources are not produce (i.e no duplicate content should be produce - just pick one of the duplicate content and skip the rest duplicate content)\n- NOTE: Don't put too much important content in the Optional when making decision because only Post-worthy content will be consider, if all are not worthy\n- Decision: Evaluate if the article is good enough to post. If it meets your criteria, output the exact string \"Post-worthy\". If it does not, output \"Skip\". Do not use any other variations.\n\n---\n📰 Article Data\nTitle: {{ $json.title }}\nDescription: {{ $json.contentSnippet }} \nContent: {{ $json.content }}\nPublished At: {{ $json.pubDate }}\nUrl: {{ $json.link }}\nImageUrl: {{ $json.imageUrl }}\nStoryId: {{ $json.storyId }}",
+        "hasOutputParser": true,
+        "needsFallback": true
+      },
+      "id": "23aadf4a-4554-4309-b437-4caed2ba7505",
+      "name": "🧠 Stage 1: Gatekeeper (Scoring)",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [
+        976,
+        1104
+      ]
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"Total Score\": 18,\n  \"Title\": \"Article title as provided\",\n  \"Decision\": \"Post-worthy\",\n  \"Description\": \"Article description or content snippet as provided\",\n  \"Content\": \"Full article body content as provided\",\n  \"StoryId\": \"Article storyid as provided\",\n  \"Url\": \"https://example.com/article\",\n  \"ImageUrl\": \"https://example.com/image.jpg\"\n}"
+      },
+      "id": "fb8eb1eb-2aff-4db9-9d82-abd4fe197bb6",
+      "name": "Output Parser (Gatekeeper)",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        1216,
+        1312
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f5a89f92-5655-4a69-89a1-b8449c403333",
+              "leftValue": "={{ $json.output['Total Score'] }}",
+              "rightValue": 15,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            },
+            {
+              "id": "6a9e1e2d-4589-40c0-a7d1-e63a1f81d111",
+              "leftValue": "={{ $json.output.Decision }}",
+              "rightValue": "Post-worthy",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "dba81920-9548-4e9a-886e-ad06ad377ea7",
+      "name": "🎯 IF: Score >= 15 & Post-worthy",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1328,
+        1104
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a professional football news curator and social media strategist.\nYour task is to provide a summary only for a story that is Post-worthy.\n\n---\n📌 Rules\n- Be concise, factual, and neutral in tone.\n- Provide a 50–250 word summary using ONLY facts from the article above - if article mentions coaches/managers, include them; if not, don't add them.\n- **CRITICAL: In your summary, include ONLY information explicitly stated in the article below. Do NOT add coaches, managers, players, or any context from your training data unless they are specifically mentioned in the article content.**\n\n---\n⚠️ ACCURACY CHECKPOINT: Before writing summary, verify every fact appears in the article content above. If a person's name (coach, player, manager) is not in the article, do NOT include them in your summary.\n\n---\n📰 Article Data\nTitle: {{ $json.output.Title }}\nDescription: {{ $json.output.Description }}\nContent: {{ $json.output.Content }}\nStoryId: {{ $json.output.StoryId }}\nUrl: {{ $json.output.Url }}\nImageUrl: {{ $json.output.ImageUrl }}",
+        "hasOutputParser": true,
+        "needsFallback": true
+      },
+      "id": "487d757b-7465-4792-a260-ab3629925af7",
+      "name": "🧠 Stage 2: Editor (Summary)",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [
+        1616,
+        848
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "a348146e-559a-49f4-9282-4b84d793da2d",
+      "name": "Gemini Chat Model (Editor)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1536,
+        1072
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "oYizSylmQWOhP8Qk",
+          "name": "Google Gemini(PaLM) Api account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"Title\": \"Article title as provided\",\n  \"Summary\": \"This is a 50 to 250 word summary using ONLY facts explicitly stated in the article content provided above.\",\n  \"storyId\": \"Article storyid as provided\",\n  \"url\": \"https://example.com/article\",\n  \"imageUrl\": \"https://example.com/image.jpg\"\n}"
+      },
+      "id": "a1e029e5-3244-40ba-87e5-2ddbb34d56b3",
+      "name": "Output Parser (Editor)",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        1840,
+        1072
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash-lite",
+        "options": {}
+      },
+      "id": "0baca86a-b55f-472d-8e1c-5f116e5e30ee",
+      "name": "🧠 Analysis LLM (Gemini - Scoring Brain)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        864,
+        1312
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "NfsrSaLpgZ2hnknK",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=🚨 ACCURACY RULE: Use ONLY information from the article summary below. If coaches, managers, or players are mentioned in the summary, you may include them. If they are NOT in the summary, do NOT add them from your memory.\n\n---\nYou are a world-class football journalist known for breaking transfer news and viral updates, similar to Fabrizio Romano or top sports insiders. \nYour tone is professional, confident, and energetic.\n\nYour task: Write a clean, high-engagement Facebook post (50–250 words) based on this update.\n\nCurrent Date: {{ $now.toFormat('MMMM dd, yyyy') }}\n---\n\n📰 Article Data\nTitle: {{ $json.output.Title }}\nStoryId: {{ $json.output.storyId }}\nUrl: {{ $json.output.url }}\nImageUrl: {{ $json.output.imageUrl }}\nSummary: {{ $json.output.Summary }}\n\n---\n🧠 Writing Style:\n\n- Hooks \n- Focus ONLY on men's football (skip or ignore women's football).\n- Use your own signature tone — fresh, sharp, and engaging.\n- Avoid copying Fabrizio Romano's phrases (no \"Here we go\" or \"Official\" unless it fits naturally).\n- Be original and natural — like a trusted football insider.\n- Start strong with energy or urgency (e.g., \"🚨 Big update:\" \"🔥 Breaking:\" \"⚡ Confirmed deal:\".\n- Add a short follow-up line for context or impact.\n- Include 2–4 relevant hashtags (#FootballNews #Transfers #EPL, etc.).\n- **CRITICAL: Only mention people (coaches, managers, players) if they are specifically named in the Summary above. If the summary says \"Barcelona\" without naming a coach, write about \"Barcelona\" not \"Flick's Barcelona\" or \"under [coach name]\".**\n- **If unsure whether someone was mentioned in the summary, leave them out. Better to be general than wrong.**",
+        "hasOutputParser": true,
+        "needsFallback": true
+      },
+      "id": "b65be105-a1b1-4207-962c-0aaeeb54f63a",
+      "name": "🧠 Stage 3A: Facebook Writer",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [
+        2032,
+        1344
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "558a8376-a56a-4914-838d-0f99d5b8544b",
+      "name": "Gemini Chat Model (FB)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1920,
+        1568
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "NfsrSaLpgZ2hnknK",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"facebook_post\": \"🚨 Big update: Real Madrid are in advanced talks to extend Vinícius Jr's contract until 2029. \\n\\nFinal details are expected to be finalized this week.\\n\\n#RealMadrid #LaLiga #Transfers\",\n  \"storyId\": \"Article storyid as provided\",\n  \"url\": \"https://example.com/article\",\n  \"imageUrl\": \"https://example.com/image.jpg\"\n}"
+      },
+      "id": "3ac293d5-5cf8-40aa-a8c7-31eff6ed92a1",
+      "name": "Output Parser (FB)",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        2272,
+        1568
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a social media copy editor. Your task is to take the provided Facebook post data and compress it into a single-paragraph X (Twitter) post.\n\n---\nInput Data:\nFacebook Post: {{ $json.output.facebook_post }}\nStoryId: {{ $json.output.storyId }}\nUrl: {{ $json.output.url }}\nImageUrl: {{ $json.output.imageUrl }}\n\n---\nStrict Rules for X Post:\n- Maximum 245 characters total.\n- Single paragraph only (no line breaks).\n- No markdown formatting (no **bold**, no italics, no bullet points).\n- Plain text only.\n- Keep the exact same meaning and facts—do not add new information.\n- Must be punchy and engaging with a leading emoji.\n- Pass through the facebook_post, url, imageUrl, and storyId exactly as they were provided.",
+        "hasOutputParser": true,
+        "needsFallback": true
+      },
+      "id": "be057175-aa38-4aeb-be37-d91b23040671",
+      "name": "🐦 Stage 3B: X Compressor",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [
+        2592,
+        1344
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "5b2ee952-38d8-4c61-99c5-9aff6de3a8f7",
+      "name": "Gemini Chat Model (X)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        2496,
+        1568
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "oYizSylmQWOhP8Qk",
+          "name": "Google Gemini(PaLM) Api account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"facebook_post\": \"🚨 Big update: Real Madrid are in advanced talks to extend Vinícius Jr's contract until 2029. \\n\\nFinal details are expected to be finalized this week.\\n\\n#RealMadrid #LaLiga #Transfers\",\n  \"x_post\": \"🚨 Big update: Real Madrid are in advanced talks to extend Vinícius Jr's contract until 2029 with final details expected this week. #RealMadrid #Transfers\",\n  \"storyId\": \"Article storyid as provided\",\n  \"url\": \"https://example.com/article\",\n  \"imageUrl\": \"https://example.com/image.jpg\"\n}"
+      },
+      "id": "50c0fb7e-f572-4a71-a4e9-844f427532f6",
+      "name": "Output Parser (X)",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        2832,
+        1568
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\n// Get the original publishing data from Stage 3B\nconst source = $('🐦 Stage 3B: X Compressor').first().json;\n\nconst output = source.output || source;\n\nreturn items.map(item => {\n  const data = item.json || {};\n\n  return {\n    json: {\n      storyId: output.storyId || '',\n      url: output.url || '',\n      imageUrl: output.imageUrl || '',\n\n      platform: 'facebook',\n      postSuccess: true,\n\n      facebookPostId:\n        data.post_id ||\n        data.id ||\n        ''\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3632,
+        1248
+      ],
+      "id": "6b8fc955-f33f-462a-85b1-14d35924e1e2",
+      "name": "📘 Facebook Success Metadata"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\n// Get the original story data\nconst source = $('🐦 Stage 3B: X Compressor').first().json;\nconst output = source.output || source;\n\nreturn items.map(item => {\n  const data = item.json || {};\n\n  // Buffer success = status \"sent\"\n  const postSuccess =\n    String(data.status || '').trim().toLowerCase() === 'sent';\n\n  return {\n    json: {\n      // Original story information\n      storyId: output.storyId || '',\n      url: output.url || '',\n      imageUrl: output.imageUrl || '',\n\n      // Platform\n      platform: 'x',\n\n      // Publishing result\n      postSuccess,\n\n      // Buffer information\n      xPostId: data.id || '',\n      xPostUrl: data.externalLink || '',\n      xStatus: data.status || '',\n\n      // Optional debugging information\n      xResponse: {\n        status: data.status || '',\n        id: data.id || '',\n        externalLink: data.externalLink || '',\n        channelService: data.channelService || ''\n      }\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3632,
+        1440
+      ],
+      "id": "4dc28c04-b34d-4705-845b-beea6eda59b7",
+      "name": "𝕏 Success Metadata1"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        3184,
+        1440
+      ],
+      "id": "87c33b07-bea1-4a69-9e52-95763f9862ca",
+      "name": "⏳ Post Processing Buffer (Media Sync Delay)",
+      "webhookId": "ce7739fb-1b8b-4899-a0cf-0e6072a299b2"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5.6-sol",
+          "mode": "id"
+        },
+        "responsesApiEnabled": false,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1040,
+        1312
+      ],
+      "id": "22e7f94e-2635-411e-a447-74f0ca06aec2",
+      "name": "🧠 Analysis LLM (OpenAi - Scoring Brain)",
+      "credentials": {
+        "openAiApi": {
+          "id": "4l5MnCO6HIqPSPKL",
+          "name": "OpenAI account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5.6-sol",
+          "mode": "id"
+        },
+        "responsesApiEnabled": false,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1696,
+        1072
+      ],
+      "id": "d18e6187-1ec2-4563-a390-50207ff90c47",
+      "name": "OpenAi Chat Model (Editor)",
+      "credentials": {
+        "openAiApi": {
+          "id": "4l5MnCO6HIqPSPKL",
+          "name": "OpenAI account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5.6-sol",
+          "mode": "id"
+        },
+        "responsesApiEnabled": false,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        2096,
+        1568
+      ],
+      "id": "99c9bcb9-5bc0-4e21-acc6-dbfa26ba1961",
+      "name": "OpenAI Chat Model (FB)",
+      "credentials": {
+        "openAiApi": {
+          "id": "4l5MnCO6HIqPSPKL",
+          "name": "OpenAI account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5.6-sol",
+          "mode": "id"
+        },
+        "responsesApiEnabled": false,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        2672,
+        1568
+      ],
+      "id": "4a96094a-764b-450f-91f9-87901a57117b",
+      "name": "OpenAI Chat Model (X)",
+      "credentials": {
+        "openAiApi": {
+          "id": "4l5MnCO6HIqPSPKL",
+          "name": "OpenAI account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "post",
+        "organizationId": "YOUR_BUFFER_ORG_ID",
+        "channelId": "YOUR_BUFFER_CHANNEL_ID",
+        "postText": "={{ $json.output.x_post }}",
+        "schedulingType": "notification",
+        "attachmentType": "image",
+        "imageUrl": "={{ $json.output.imageUrl }}",
+        "imageThumbnailUrl": "={{ $json.output.imageUrl }}"
+      },
+      "type": "@bufferapp/n8n-nodes-buffer.buffer",
+      "typeVersion": 1,
+      "position": [
+        3408,
+        1440
+      ],
+      "id": "2c16ad65-7559-48bf-b8b3-8f7aa1b5a170",
+      "name": "Create a post with image (X Publisher)",
+      "credentials": {
+        "bufferApi": {
+          "id": "ht9o1bOkPM7pOkdn",
+          "name": "Buffer account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "BBC Football RSS Source",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Sky Sports Transfer Feed",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Sky Sports General Feed",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Sky Sports Breaking News Feed",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "ESPN Football RSS Source",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "TALKSPORT RSS source",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Operation, do nothing": {
+      "main": [
+        [
+          {
+            "node": "🔁 Batch Processor (Split In Batches - 2 Items)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unified Football News Aggregator": {
+      "main": [
+        [
+          {
+            "node": "Media Normalizer (Image Standardizer)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ESPN Football RSS Source": {
+      "main": [
+        [
+          {
+            "node": "ESPN Enriched Article Builder (Text + Image Merge)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "ESPN Article HTML Fetcher",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BBC Football RSS Source": {
+      "main": [
+        [
+          {
+            "node": "BBC Article HTML Fetcher",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "BBC Enriched Article Builder (Text + Image Merge)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sky Sports Transfer Feed": {
+      "main": [
+        [
+          {
+            "node": "Unified Football News Aggregator",
+            "type": "main",
+            "index": 4
+          }
+        ]
+      ]
+    },
+    "Sky Sports General Feed": {
+      "main": [
+        [
+          {
+            "node": "Unified Football News Aggregator",
+            "type": "main",
+            "index": 5
+          }
+        ]
+      ]
+    },
+    "Sky Sports Breaking News Feed": {
+      "main": [
+        [
+          {
+            "node": "Unified Football News Aggregator",
+            "type": "main",
+            "index": 6
+          }
+        ]
+      ]
+    },
+    "Media Normalizer (Image Standardizer)": {
+      "main": [
+        [
+          {
+            "node": "🛑 Football Content Safety Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⏱️ News Freshness Validator (8h Window)": {
+      "main": [
+        [
+          {
+            "node": "⏱️ Smart Football Deduplicator Engine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⏱️ Smart Football Deduplicator Engine": {
+      "main": [
+        [
+          {
+            "node": "🧠 Generate Story ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔁 Batch Processor (Split In Batches - 2 Items)": {
+      "main": [
+        [],
+        [
+          {
+            "node": "🧠 Stage 1: Gatekeeper (Scoring)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🖼️ Image Fetcher": {
+      "main": [
+        [
+          {
+            "node": "📘 Facebook Publisher (Meta Graph API)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "⏳ Post Processing Buffer (Media Sync Delay)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📘 Facebook Publisher (Meta Graph API)": {
+      "main": [
+        [
+          {
+            "node": "📘 Facebook Success Metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⏳ Cross-Batch Throttle Controller": {
+      "main": [
+        [
+          {
+            "node": "🚫 Duplicate Checker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⏳ Batch Hold Delay (Pre-AI Cooldown)": {
+      "main": [
+        [
+          {
+            "node": "🧠 Stage 3A: Facebook Writer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⏳ Post Delay Controller": {
+      "main": [
+        [
+          {
+            "node": "🐦 Stage 3B: X Compressor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ESPN Image Extractor": {
+      "main": [
+        [
+          {
+            "node": "ESPN Enriched Article Builder (Text + Image Merge)",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "BBC Image Extractor": {
+      "main": [
+        [
+          {
+            "node": "BBC Enriched Article Builder (Text + Image Merge)",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "BBC Article HTML Fetcher": {
+      "main": [
+        [
+          {
+            "node": "BBC Image Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ESPN Enriched Article Builder (Text + Image Merge)": {
+      "main": [
+        [
+          {
+            "node": "Unified Football News Aggregator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BBC Enriched Article Builder (Text + Image Merge)": {
+      "main": [
+        [
+          {
+            "node": "Unified Football News Aggregator",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "ESPN Article HTML Fetcher": {
+      "main": [
+        [
+          {
+            "node": "ESPN Image Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TALKSPORT RSS source": {
+      "main": [
+        [
+          {
+            "node": "🧹 Universal Feed Standardizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧹 Universal Feed Standardizer": {
+      "main": [
+        [
+          {
+            "node": "Unified Football News Aggregator",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "🚫 Duplicate Checker": {
+      "main": [
+        [
+          {
+            "node": "🔁 Batch Processor (Split In Batches - 2 Items)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✅ Successful Post Logger": {
+      "main": [
+        [
+          {
+            "node": "⏳ Cross-Batch Throttle Controller",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🛑 Football Content Safety Filter": {
+      "main": [
+        [
+          {
+            "node": "⏱️ News Freshness Validator (8h Window)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧠 Generate Story ID": {
+      "main": [
+        [
+          {
+            "node": "🚫 Duplicate Checker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post Merger": {
+      "main": [
+        [
+          {
+            "node": "✅ Successful Post Logger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧠 Stage 1: Gatekeeper (Scoring)": {
+      "main": [
+        [
+          {
+            "node": "🎯 IF: Score >= 15 & Post-worthy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Output Parser (Gatekeeper)": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "🧠 Stage 1: Gatekeeper (Scoring)",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🎯 IF: Score >= 15 & Post-worthy": {
+      "main": [
+        [
+          {
+            "node": "🧠 Stage 2: Editor (Summary)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Operation, do nothing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧠 Stage 2: Editor (Summary)": {
+      "main": [
+        [
+          {
+            "node": "⏳ Batch Hold Delay (Pre-AI Cooldown)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Chat Model (Editor)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "🧠 Stage 2: Editor (Summary)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Output Parser (Editor)": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "🧠 Stage 2: Editor (Summary)",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧠 Analysis LLM (Gemini - Scoring Brain)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "🧠 Stage 1: Gatekeeper (Scoring)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧠 Stage 3A: Facebook Writer": {
+      "main": [
+        [
+          {
+            "node": "⏳ Post Delay Controller",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Chat Model (FB)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "🧠 Stage 3A: Facebook Writer",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Output Parser (FB)": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "🧠 Stage 3A: Facebook Writer",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🐦 Stage 3B: X Compressor": {
+      "main": [
+        [
+          {
+            "node": "🖼️ Image Fetcher",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Chat Model (X)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "🐦 Stage 3B: X Compressor",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Output Parser (X)": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "🐦 Stage 3B: X Compressor",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📘 Facebook Success Metadata": {
+      "main": [
+        [
+          {
+            "node": "Post Merger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "𝕏 Success Metadata1": {
+      "main": [
+        [
+          {
+            "node": "Post Merger",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "⏳ Post Processing Buffer (Media Sync Delay)": {
+      "main": [
+        [
+          {
+            "node": "Create a post with image (X Publisher)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧠 Analysis LLM (OpenAi - Scoring Brain)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "🧠 Stage 1: Gatekeeper (Scoring)",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "OpenAi Chat Model (Editor)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "🧠 Stage 2: Editor (Summary)",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model (FB)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "🧠 Stage 3A: Facebook Writer",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model (X)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "🐦 Stage 3B: X Compressor",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Create a post with image (X Publisher)": {
+      "main": [
+        [
+          {
+            "node": "𝕏 Success Metadata1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {}
+}
