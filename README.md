@@ -108,6 +108,13 @@ This project therefore focuses heavily on **automation architecture and programm
 * **Meta Graph API** — Facebook publishing
 * **Buffer API** — X (Twitter) distribution
 
+## 🏆 Proof of Execution
+
+Here are live examples of the fully automated output published directly to Facebook and X:
+
+![Live Facebook Post](assets/Facebook live post.jpg)
+![Live X Post](assets/X Live Post.jpg)
+
 ## 🚀 Setup Instructions
 
 1. **Import Workflow:** Download `workflow/football-news-automation.json` and import it into your n8n workspace.
