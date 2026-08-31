@@ -15,7 +15,7 @@ Before examining the nodes, it is important to understand the design philosophy 
 
 ## 1. Ingestion, Filtering & Smart Deduplication
 
-![Data Ingestion](../assets/phase1-ingestion.jpg)
+![Data Ingestion](../assets/phase1-ingestion.jpg.jpg)
 
 The workflow begins by polling 6 distinct RSS feeds on a cron schedule (`0 6,10,14,18,22 * * *`). It does not immediately publish data; instead, it enters a rigorous sanitization pipeline:
 
